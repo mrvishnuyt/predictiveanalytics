@@ -1,6 +1,5 @@
-Of course, here is a professional README file for your GitHub repository.
-
 Predictive Analytics Web Application
+
 A full-stack web application for performing predictive analytics. This project uses a Python backend for data processing and machine learning and a modern JavaScript framework for the user interface.
 
 📖 Table of Contents
