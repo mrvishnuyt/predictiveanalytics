@@ -1,5 +1,28 @@
+
+# Predictive Analytics Web Application
+
 This is a full-stack web application for performing predictive analytics. The application uses a Python backend for data processing and machine learning, and a JavaScript-based frontend for the user interface, allowing users to interact with predictive models through their web browser.
 
-To start the application, first run the backend server with the command 'python manage.py app.py'. 
-Then, in a separate terminal, start the frontend development server using 'npm start'. 
-You can then access the application in your web browser, typically at a local host address.
+## 🚀 How to Run
+
+Follow these steps to start the application locally.
+
+### 1\. Start the Backend Server
+
+In your terminal, run the following command to start the Python server:
+
+```sh
+python manage.py app.py
+```
+
+### 2\. Start the Frontend Application
+
+In a **new terminal window**, run the following command to start the frontend development server:
+
+```sh
+npm start
+```
+
+### 3\. View the Application
+
+Once both servers are running, open your web browser and navigate to the address provided by the frontend server (usually `http://localhost:3000`).
