@@ -12,7 +12,7 @@ Follow these steps to start the application locally.
 In your terminal, run the following command to start the Python server:
 
 ```sh
-python manage.py app.py
+python app.py
 ```
 
 ### 2\. Start the Frontend Application
