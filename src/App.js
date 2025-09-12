@@ -29,7 +29,7 @@ const AuthProvider = ({ children }) => {
             if (res.access_token) {
                 setToken(res.access_token);
                 localStorage.setItem("token", res.access_token);
-                navigate("/");
+                navigate("/dashboard"); // Redirect to dashboard on successful login
                 return;
             }
             throw new Error(res.msg || "Login failed");
@@ -56,7 +56,7 @@ const AuthProvider = ({ children }) => {
 const ProtectedRoute = ({ children }) => {
     const { token } = React.useContext(AuthContext);
     if (!token) {
-        return <Navigate to="/login" />;
+        return <Navigate to="/login" replace />;
     }
     return children;
 };
@@ -138,7 +138,7 @@ const Sidebar = () => {
     const { logOut } = React.useContext(AuthContext);
     return (
         <aside className="w-64 bg-gray-900/60 backdrop-blur-md text-gray-300 p-4 flex flex-col border-r border-gray-700/50">
-            <Link to="/" className="text-white text-xl font-bold mb-10 flex items-center gap-3 hover:text-violet-400 transition-colors">
+            <Link to="/dashboard" className="text-white text-xl font-bold mb-10 flex items-center gap-3 hover:text-violet-400 transition-colors">
                 <div className="bg-violet-600/20 p-2 rounded-lg border border-violet-500/30">
                     <svg className="w-7 h-7 text-violet-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg>
                 </div>
@@ -148,7 +148,7 @@ const Sidebar = () => {
                 <ul className="space-y-2">
                     {['Dashboard', 'Students', 'Courses', 'Reports', 'Settings'].map(name => (
                         <li key={name}>
-                            <NavLink to={name === 'Dashboard' ? '/' : `/${name.toLowerCase()}`} className={({ isActive }) => `w-full text-left p-3 rounded-lg flex items-center gap-3 transition-all duration-200 ${isActive ? 'bg-violet-600 text-white shadow-lg' : 'hover:bg-gray-700/50'}`}>
+                            <NavLink to={`/${name.toLowerCase()}`} className={({ isActive }) => `w-full text-left p-3 rounded-lg flex items-center gap-3 transition-all duration-200 ${isActive ? 'bg-violet-600 text-white shadow-lg' : 'hover:bg-gray-700/50'}`}>
                                 {icons[name]}
                                 <span className="font-semibold">{name}</span>
                             </NavLink>
@@ -230,7 +230,6 @@ const DashboardPage = () => {
     const [stats, setStats] = React.useState(null);
     const [isLoading, setIsLoading] = React.useState(true);
     const { token } = React.useContext(AuthContext);
-
 
     React.useEffect(() => {
         setIsLoading(true);
@@ -557,13 +556,15 @@ const AppLayout = () => {
                 <Header />
                 <main key={location.pathname} className="flex-1 overflow-x-hidden overflow-y-auto animate-fade-in-up" style={{ animationDelay: '50ms' }}>
                     <Routes>
-                        <Route path="/" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-                        <Route path="/students" element={<ProtectedRoute><StudentsPage /></ProtectedRoute>} />
-                        <Route path="/courses" element={<ProtectedRoute><CoursesPage /></ProtectedRoute>} />
-                        <Route path="/courses/:courseName" element={<ProtectedRoute><CourseDetailPage /></ProtectedRoute>} />
-                        <Route path="/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />
-                        <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
-                        <Route path="/search" element={<ProtectedRoute><SearchPage /></ProtectedRoute>} />
+                        <Route path="/dashboard" element={<DashboardPage />} />
+                        <Route path="/students" element={<StudentsPage />} />
+                        <Route path="/courses" element={<CoursesPage />} />
+                        <Route path="/courses/:courseName" element={<CourseDetailPage />} />
+                        <Route path="/reports" element={<ReportsPage />} />
+                        <Route path="/settings" element={<SettingsPage />} />
+                        <Route path="/search" element={<SearchPage />} />
+                        {/* Redirect from the base protected path to the dashboard */}
+                        <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     </Routes>
                 </main>
             </div>
@@ -647,7 +648,14 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<AuthForm />} />
           <Route path="/register" element={<AuthForm isRegister />} />
-          <Route path="/*" element={<AppLayout />} />
+          <Route 
+            path="/*" 
+            element={
+              <ProtectedRoute>
+                <AppLayout />
+              </ProtectedRoute>
+            } 
+          />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
