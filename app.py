@@ -10,7 +10,7 @@ import joblib # Import joblib to load your trained model
 # Initialize Flask App and add JWT
 app = Flask(__name__)
 # IMPORTANT: In Vercel, set an Environment Variable named JWT_SECRET_KEY
-app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "2200030908")
+app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "your-fallback-secret-key-for-local-dev")
 jwt = JWTManager(app)
 CORS(app)
 
@@ -72,7 +72,6 @@ df['PredictedEngagement'] = predict_engagement(df)
 # --- Authentication API Endpoints ---
 @app.route('/api/register', methods=['POST'])
 def register():
-    # ... (This function remains unchanged)
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
@@ -90,7 +89,6 @@ def register():
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    # ... (This function remains unchanged)
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
@@ -106,7 +104,6 @@ def login():
 @app.route('/api/profile', methods=['GET', 'PUT'])
 @jwt_required()
 def profile():
-    # ... (This function remains unchanged)
     current_user = get_jwt_identity()
     users = load_users()
     user_data = users.get(current_user)
