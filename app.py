@@ -13,6 +13,7 @@ from firebase_admin import credentials, firestore
 # IMPORTANT: In Vercel, create a single Environment Variable named FIREBASE_SERVICE_ACCOUNT_KEY
 # and paste the entire content of your JSON credentials file as its value.
 try:
+    # Vercel stores the JSON content as a string, so we need to load it
     service_account_info = json.loads(os.environ.get("FIREBASE_SERVICE_ACCOUNT_KEY"))
     cred = credentials.Certificate(service_account_info)
     firebase_admin.initialize_app(cred)
