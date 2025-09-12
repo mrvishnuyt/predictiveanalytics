@@ -40,7 +40,6 @@ features = ['TimeSpentOnCourse', 'QuizScores', 'CompletionRate']
 df.dropna(subset=features, inplace=True)
 
 def predict_engagement(data):
-    # ... (This function remains unchanged)
     data_df = pd.DataFrame(data)
     if data_df.empty or not all(f in data_df.columns for f in features):
         return []
@@ -60,7 +59,7 @@ df['PredictedEngagement'] = predict_engagement(df)
 @app.route('/api/register', methods=['POST'])
 def register():
     if not users_collection:
-        return jsonify({"msg": "Database not configured"}), 500
+        return jsonify({"msg": "Database not configured properly on the server"}), 500
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
@@ -80,7 +79,7 @@ def register():
 @app.route('/api/login', methods=['POST'])
 def login():
     if not users_collection:
-        return jsonify({"msg": "Database not configured"}), 500
+        return jsonify({"msg": "Database not configured properly on the server"}), 500
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
@@ -124,7 +123,6 @@ def profile():
 
 
 # --- Data API Endpoints (Unchanged) ---
-# ... (all your other endpoints like /api/students, /api/dashboard_stats, etc. remain here)
 @app.route('/api/students')
 @jwt_required()
 def get_students():
