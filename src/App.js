@@ -9,7 +9,7 @@ ChartJS.defaults.color = '#94a3b8'; // slate-400
 ChartJS.defaults.font.family = '"Inter", sans-serif';
 ChartJS.defaults.font.weight = '500';
 
-const API_BASE_URL = '';
+const API_BASE_URL = 'http://127.0.0.1:5000';
 
 // --- Authentication Context ---
 const AuthContext = React.createContext(null);
