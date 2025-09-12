@@ -12,7 +12,7 @@ import os
 
 # Initialize Flask App and add JWT
 app = Flask(__name__)
-app.config["JWT_SECRET_KEY"] = "your-super-secret-key-change-me"  # Change this!
+app.config["JWT_SECRET_KEY"] = "2200030908"  # Change this!
 jwt = JWTManager(app)
 CORS(app)
 
