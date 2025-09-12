@@ -4,14 +4,23 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 import joblib
 
+print("Starting model training process...")
+
 # Load the dataset
-print("Loading data...")
-df = pd.read_csv('online_course_engagement_data.csv')
+try:
+    df = pd.read_csv('online_course_engagement_data.csv')
+    print("Dataset loaded successfully.")
+except FileNotFoundError:
+    print("Error: 'online_course_engagement_data.csv' not found. Make sure it's in the same directory.")
+    exit()
 
 # Define features and target
 features = ['TimeSpentOnCourse', 'QuizScores', 'CompletionRate']
 target = 'CourseCompletion'
+
+# Drop rows with missing values in key columns to prevent errors
 df.dropna(subset=features, inplace=True)
+print(f"Dataset cleaned. Working with {len(df)} rows.")
 
 X = df[features]
 y = df[target]
@@ -20,17 +29,19 @@ y = df[target]
 X_train, _, y_train, _ = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # Create and train the scaler
-print("Training scaler...")
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
-joblib.dump(scaler, 'scaler.joblib')
-print("Scaler saved to scaler.joblib")
+print("Data scaler has been trained.")
 
 # Create and train the model
-print("Training model...")
 model = LogisticRegression(random_state=42)
 model.fit(X_train_scaled, y_train)
-joblib.dump(model, 'model.joblib')
-print("Model saved to model.joblib")
+print("Engagement prediction model has been trained.")
 
-print("\nModel training complete and files saved successfully!")
+# Save the scaler and the model to files
+joblib.dump(scaler, 'scaler.joblib')
+joblib.dump(model, 'model.joblib')
+
+print("\nSuccess! 'scaler.joblib' and 'model.joblib' have been created.")
+print("You can now commit these files to your Git repository.")
+
