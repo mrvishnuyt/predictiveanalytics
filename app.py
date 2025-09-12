@@ -5,41 +5,34 @@ import json
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager
 import os
-import joblib # Import joblib to load your trained model
+import joblib
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+# --- Firebase Initialization ---
+# IMPORTANT: In Vercel, create a single Environment Variable named FIREBASE_SERVICE_ACCOUNT_KEY
+# and paste the entire content of your JSON credentials file as its value.
+try:
+    service_account_info = json.loads(os.environ.get("FIREBASE_SERVICE_ACCOUNT_KEY"))
+    cred = credentials.Certificate(service_account_info)
+    firebase_admin.initialize_app(cred)
+    db = firestore.client()
+    users_collection = db.collection('users')
+    print("Firebase initialized successfully.")
+except Exception as e:
+    print(f"Firebase initialization failed: {e}")
+    db = None
+    users_collection = None
 
 # Initialize Flask App and add JWT
 app = Flask(__name__)
-# IMPORTANT: In Vercel, set an Environment Variable named JWT_SECRET_KEY
 app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "your-fallback-secret-key-for-local-dev")
 jwt = JWTManager(app)
 CORS(app)
 
-# --- User Data Management ---
-USERS_FILE = 'users.json'
-
-def load_users():
-    if not os.path.exists(USERS_FILE):
-        return {}
-    try:
-        with open(USERS_FILE, 'r') as f:
-            return json.load(f)
-    except (IOError, json.JSONDecodeError):
-        return {}
-
-def save_users(users):
-    with open(USERS_FILE, 'w') as f:
-        json.dump(users, f, indent=4)
-
 # --- Load Pre-trained Model and Scaler ---
-try:
-    scaler = joblib.load('scaler.joblib')
-    model = joblib.load('model.joblib')
-except FileNotFoundError:
-    # This is a fallback for local development if the model files don't exist
-    # The deployed app on Vercel will have these files from your Git repo
-    print("WARNING: model.joblib or scaler.joblib not found. Predictions will not be accurate.")
-    scaler = None
-    model = None
+scaler = joblib.load('scaler.joblib')
+model = joblib.load('model.joblib')
 
 # --- Data Loading and Predictions ---
 df = pd.read_csv('online_course_engagement_data.csv')
@@ -47,55 +40,56 @@ features = ['TimeSpentOnCourse', 'QuizScores', 'CompletionRate']
 df.dropna(subset=features, inplace=True)
 
 def predict_engagement(data):
-    """Predicts engagement using the pre-trained model."""
-    if not model or not scaler:
-        return ['N/A'] * len(data) # Return 'Not Available' if model isn't loaded
-        
+    # ... (This function remains unchanged)
     data_df = pd.DataFrame(data)
     if data_df.empty or not all(f in data_df.columns for f in features):
         return []
-        
     scaled_data = scaler.transform(data_df[features])
-    probabilities = model.predict_proba(scaled_data)[:, 1]
-    
+    probabilities = model.predict_proba(scaled_data)[:, 1] 
     def categorize(prob):
         if prob > 0.75: return 'High'
         elif prob > 0.4: return 'Medium'
         else: return 'Low'
-            
     return [categorize(p) for p in probabilities]
 
-# Apply predictions to the dataframe on startup
 df['PredictedEngagement'] = predict_engagement(df)
 
 
-# --- Authentication API Endpoints ---
+# --- Authentication API Endpoints (Updated for Firebase) ---
+
 @app.route('/api/register', methods=['POST'])
 def register():
+    if not users_collection:
+        return jsonify({"msg": "Database not configured"}), 500
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
-    users = load_users()
 
     if not username or not password:
         return jsonify({"msg": "Username and password required"}), 400
-    if username in users:
+    
+    user_doc = users_collection.document(username).get()
+    if user_doc.exists:
         return jsonify({"msg": "Username already exists"}), 409
 
     hashed_password = generate_password_hash(password)
-    users[username] = {"password": hashed_password, "email": f"{username}@example.com"}
-    save_users(users)
+    user_data = {"password": hashed_password, "email": f"{username}@example.com"}
+    users_collection.document(username).set(user_data)
     return jsonify({"msg": "User created successfully"}), 201
 
 @app.route('/api/login', methods=['POST'])
 def login():
+    if not users_collection:
+        return jsonify({"msg": "Database not configured"}), 500
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
-    users = load_users()
-    
-    user = users.get(username)
-    if user and check_password_hash(user['password'], password):
+
+    if not username or not password:
+        return jsonify({"msg": "Username and password required"}), 400
+        
+    user_doc = users_collection.document(username).get()
+    if user_doc.exists and check_password_hash(user_doc.to_dict()['password'], password):
         access_token = create_access_token(identity=username)
         return jsonify(access_token=access_token)
     
@@ -104,29 +98,33 @@ def login():
 @app.route('/api/profile', methods=['GET', 'PUT'])
 @jwt_required()
 def profile():
+    if not users_collection:
+        return jsonify({"msg": "Database not configured"}), 500
     current_user = get_jwt_identity()
-    users = load_users()
-    user_data = users.get(current_user)
-
-    if not user_data:
-        return jsonify({"msg": "User not found"}), 404
-
+    user_ref = users_collection.document(current_user)
+    
     if request.method == 'PUT':
         data = request.get_json()
+        update_data = {}
         if 'email' in data:
-            user_data['email'] = data['email']
+            update_data['email'] = data['email']
         if 'password' in data and data['password']:
-            user_data['password'] = generate_password_hash(data['password'])
+            update_data['password'] = generate_password_hash(data['password'])
         
-        users[current_user] = user_data
-        save_users(users)
+        if update_data:
+            user_ref.update(update_data)
         return jsonify({"msg": "Profile updated successfully"})
 
+    # On GET request
+    user_doc = user_ref.get()
+    if not user_doc.exists:
+        return jsonify({"msg": "User not found"}), 404
+    user_data = user_doc.to_dict()
     return jsonify(username=current_user, email=user_data.get('email', ''))
 
 
-# --- Data API Endpoints (Protected) ---
-
+# --- Data API Endpoints (Unchanged) ---
+# ... (all your other endpoints like /api/students, /api/dashboard_stats, etc. remain here)
 @app.route('/api/students')
 @jwt_required()
 def get_students():
@@ -185,8 +183,4 @@ def search():
         results_df['PredictedEngagement'] = predict_engagement(results_df)
     results_df.rename(columns={'UserID': 'id', 'CourseName': 'course', 'CompletionRate': 'progress', 'QuizScores': 'score', 'TimeSpentOnCourse': 'timeSpent'}, inplace=True)
     return jsonify(results_df.to_dict(orient='records'))
-
-# This is the entrypoint for Vercel
-if __name__ == "__main__":
-    app.run(debug=True)
 
