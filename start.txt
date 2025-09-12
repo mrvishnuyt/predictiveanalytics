@@ -1,5 +1,0 @@
-START THE PYTHON APP:
-python app.py
-
-START THE REACT APP:
-npm start
