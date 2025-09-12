@@ -1,18 +1,16 @@
 import pandas as pd
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import StandardScaler
-import numpy as np
 import json
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, JWTManager
 import os
+import joblib # Import joblib to load your trained model
 
 # Initialize Flask App and add JWT
 app = Flask(__name__)
-app.config["JWT_SECRET_KEY"] = "2200030908"  # Change this!
+# IMPORTANT: In Vercel, set an Environment Variable named JWT_SECRET_KEY
+app.config["JWT_SECRET_KEY"] = os.environ.get("JWT_SECRET_KEY", "2200030908")
 jwt = JWTManager(app)
 CORS(app)
 
@@ -22,34 +20,43 @@ USERS_FILE = 'users.json'
 def load_users():
     if not os.path.exists(USERS_FILE):
         return {}
-    with open(USERS_FILE, 'r') as f:
-        return json.load(f)
+    try:
+        with open(USERS_FILE, 'r') as f:
+            return json.load(f)
+    except (IOError, json.JSONDecodeError):
+        return {}
 
 def save_users(users):
     with open(USERS_FILE, 'w') as f:
         json.dump(users, f, indent=4)
 
-# --- Data Loading and Machine Learning Model Training ---
+# --- Load Pre-trained Model and Scaler ---
+try:
+    scaler = joblib.load('scaler.joblib')
+    model = joblib.load('model.joblib')
+except FileNotFoundError:
+    # This is a fallback for local development if the model files don't exist
+    # The deployed app on Vercel will have these files from your Git repo
+    print("WARNING: model.joblib or scaler.joblib not found. Predictions will not be accurate.")
+    scaler = None
+    model = None
+
+# --- Data Loading and Predictions ---
 df = pd.read_csv('online_course_engagement_data.csv')
 features = ['TimeSpentOnCourse', 'QuizScores', 'CompletionRate']
-target = 'CourseCompletion'
 df.dropna(subset=features, inplace=True)
 
-X = df[features]
-y = df[target]
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-model = LogisticRegression(random_state=42)
-model.fit(X_train_scaled, y_train)
-
 def predict_engagement(data):
+    """Predicts engagement using the pre-trained model."""
+    if not model or not scaler:
+        return ['N/A'] * len(data) # Return 'Not Available' if model isn't loaded
+        
     data_df = pd.DataFrame(data)
     if data_df.empty or not all(f in data_df.columns for f in features):
         return []
+        
     scaled_data = scaler.transform(data_df[features])
-    probabilities = model.predict_proba(scaled_data)[:, 1] 
+    probabilities = model.predict_proba(scaled_data)[:, 1]
     
     def categorize(prob):
         if prob > 0.75: return 'High'
@@ -58,12 +65,14 @@ def predict_engagement(data):
             
     return [categorize(p) for p in probabilities]
 
+# Apply predictions to the dataframe on startup
 df['PredictedEngagement'] = predict_engagement(df)
 
-# --- NEW Authentication API Endpoints ---
 
+# --- Authentication API Endpoints ---
 @app.route('/api/register', methods=['POST'])
 def register():
+    # ... (This function remains unchanged)
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
@@ -75,20 +84,18 @@ def register():
         return jsonify({"msg": "Username already exists"}), 409
 
     hashed_password = generate_password_hash(password)
-    users[username] = {"password": hashed_password, "email": f"{username}@example.com"} # Add more fields as needed
+    users[username] = {"password": hashed_password, "email": f"{username}@example.com"}
     save_users(users)
     return jsonify({"msg": "User created successfully"}), 201
 
 @app.route('/api/login', methods=['POST'])
 def login():
+    # ... (This function remains unchanged)
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
     users = load_users()
-
-    if not username or not password:
-        return jsonify({"msg": "Username and password required"}), 400
-        
+    
     user = users.get(username)
     if user and check_password_hash(user['password'], password):
         access_token = create_access_token(identity=username)
@@ -99,6 +106,7 @@ def login():
 @app.route('/api/profile', methods=['GET', 'PUT'])
 @jwt_required()
 def profile():
+    # ... (This function remains unchanged)
     current_user = get_jwt_identity()
     users = load_users()
     user_data = users.get(current_user)
@@ -117,16 +125,14 @@ def profile():
         save_users(users)
         return jsonify({"msg": "Profile updated successfully"})
 
-    # On GET request
     return jsonify(username=current_user, email=user_data.get('email', ''))
 
 
-# --- Existing Data API Endpoints (now protected) ---
+# --- Data API Endpoints (Protected) ---
 
 @app.route('/api/students')
 @jwt_required()
 def get_students():
-    # ... (code is the same, just added @jwt_required())
     students_df = df.rename(columns={'UserID': 'id', 'CourseName': 'course', 'CompletionRate': 'progress', 'QuizScores': 'score', 'TimeSpentOnCourse': 'timeSpent'})
     for col in ['progress', 'score', 'timeSpent']:
         students_df[col] = students_df[col].round(2)
@@ -135,7 +141,6 @@ def get_students():
 @app.route('/api/dashboard_stats')
 @jwt_required()
 def get_dashboard_stats():
-    # ... (code is the same, just added @jwt_required())
     engagement_counts = df['PredictedEngagement'].value_counts()
     completion_counts = df['CourseCompletion'].value_counts()
     avg_scores = df.groupby('CourseName')['QuizScores'].mean().round(2)
@@ -143,6 +148,7 @@ def get_dashboard_stats():
     score_bins = pd.cut(df['QuizScores'], bins=[0, 20, 40, 60, 80, 100], labels=['0-20', '21-40', '41-60', '61-80', '81-100'], right=True, include_lowest=True)
     score_dist = score_bins.value_counts().sort_index()
     students_per_course = df['CourseName'].value_counts()
+    
     return jsonify({
         'engagement': {'labels': engagement_counts.index.tolist(), 'values': [int(v) for v in engagement_counts.values]},
         'completion': {'labels': ['Completed', 'In Progress'], 'values': [int(completion_counts.get(1, 0)), int(completion_counts.get(0, 0))]},
@@ -155,9 +161,8 @@ def get_dashboard_stats():
 @app.route('/api/courses')
 @jwt_required()
 def get_courses():
-    # ... (code is the same, just added @jwt_required())
     courses_agg = df.groupby('CourseName').agg(students=('UserID', 'count'), avgProgress=('CompletionRate', 'mean')).round(2).reset_index()
-    colors = ['border-sky-500', 'border-emerald-500', 'border-amber-500', 'border-violet-500']
+    colors = ['border-violet-500', 'border-sky-500', 'border-emerald-500', 'border-amber-500']
     courses_agg['color'] = [colors[i % len(colors)] for i in range(len(courses_agg))]
     courses_agg = courses_agg.rename(columns={'CourseName': 'title'})
     return jsonify(courses_agg.to_dict(orient='records'))
@@ -165,7 +170,6 @@ def get_courses():
 @app.route('/api/courses/<path:course_name>')
 @jwt_required()
 def get_course_details(course_name):
-    # ... (code is the same, just added @jwt_required())
     course_students_df = df[df['CourseName'] == course_name].copy()
     if course_students_df.empty:
         return jsonify({"error": "Course not found"}), 404
@@ -175,17 +179,17 @@ def get_course_details(course_name):
 @app.route('/api/search')
 @jwt_required()
 def search():
-    # ... (code is the same, just added @jwt_required())
     query = request.args.get('q', '').lower()
     if not query:
         return jsonify([])
-    mask = df['UserID'].astype(str).str.contains(query, case=False) | df['CourseName'].str.contains(query, case=False)
+    mask = df['UserID'].astype(str).str.lower().str.contains(query) | df['CourseName'].str.lower().str.contains(query)
     results_df = df[mask].copy()
     if not results_df.empty:
         results_df['PredictedEngagement'] = predict_engagement(results_df)
     results_df.rename(columns={'UserID': 'id', 'CourseName': 'course', 'CompletionRate': 'progress', 'QuizScores': 'score', 'TimeSpentOnCourse': 'timeSpent'}, inplace=True)
     return jsonify(results_df.to_dict(orient='records'))
 
-# --- Main execution ---
-if __name__ == '__main__':
+# This is the entrypoint for Vercel
+if __name__ == "__main__":
     app.run(debug=True)
+
