@@ -5,3 +5,4 @@ Werkzeug
 pandas
 numpy
 joblib
+firebase-admin
